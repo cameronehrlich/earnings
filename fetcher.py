@@ -1,36 +1,19 @@
 #!/usr/bin/env python
 
+import os
+os.environ.setdefault("DJANGO_SETTINGS_MODULE", "stock.settings")
+
 import requests
 import datetime
 import re
 from PIL import Image
 from bs4 import BeautifulSoup
 from cStringIO import StringIO
-from peewee import SqliteDatabase, Model, CharField, FloatField, IntegerField, DateField
+from earnings.models import Stock
 
-DATABASE_FILE = 'stocks.db'
 EARNINGS_URL = 'http://www.nasdaq.com/earnings/earnings-calendar.aspx?date='
 RECOMMENDATION_URL = 'http://www.nasdaq.com/charts/%s_smallrm.jpeg'
 INTERESTING_SYMBOLS = ['amzn', 'fb', 'appl', 'googl', 'goog', 'tsla']
-
-db = SqliteDatabase(DATABASE_FILE)
-
-
-class Stock(Model):
-    symbol = CharField(primary_key=True)
-    company = CharField()
-    cap = FloatField()
-    recommendation = FloatField()
-    eps = FloatField()
-    number = IntegerField()
-    report_date = DateField()
-    last_report_date = DateField()
-    last_eps = FloatField()
-    time = CharField()
-    quarter = CharField()
-
-    class Meta:
-        database = db
 
 
 def parse_money(s):
@@ -57,6 +40,8 @@ def parse_date(d):
     if d == 'n/a':
         return datetime.date(year=2099, month=12, day=31)
     return datetime.datetime.strptime(d, "%m/%d/%Y").date()
+
+
 def parse_earnings(table_row, with_time):
     if not table_row.td:
         return
@@ -117,25 +102,29 @@ def fetch_recommendation(symbol):
 
     return position/200.0
 
+
+def parse_earnings_table(dev, with_time):
+    if dev and dev.table:
+        for row in dev.table.find_all("tr"):
+            try:
+                stock = parse_earnings(row, with_time)
+                if stock:
+                    Stock(**stock).save()
+            except IOError:
+                print "error processing row, ignored: %r" % row
+
+
 def fetch_earnings():
     count = 0
-    day = datetime.date.today()
+    day = datetime.date.today() + datetime.timedelta(days=7)
     while count < 10:
         if day.weekday() < 5:
             url = EARNINGS_URL + day.strftime("%Y-%b-%d")
             print url
             page = requests.get(url)
             parsed = BeautifulSoup(page.content)
-            db.connect()
-            for row in parsed.find(id="two_column_main_content_pnlInsider").table.find_all("tr"):
-                stock = parse_earnings(row, with_time=True)
-                if stock:
-                    Stock(**stock).save(force_insert=True)
-            for row in parsed.find(id="two_column_main_content_Pnunconfirm").table.find_all("tr"):
-                stock = parse_earnings(row, with_time=False)
-                if stock:
-                    Stock(**stock).save(force_insert=True)
-            db.close()
+            parse_earnings_table(parsed.find(id="two_column_main_content_pnlInsider"), True)
+            parse_earnings_table(parsed.find(id="two_column_main_content_Pnunconfirm"), False)
             count += 1
         day += datetime.timedelta(days=1)
 
