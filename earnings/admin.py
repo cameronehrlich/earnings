@@ -2,8 +2,9 @@ from django.contrib import admin
 from django.db.models import Q
 from models import Stock
 from datetime import date, timedelta
-# Register your models here.
 
+SUNDAY = 6
+SATURDAY = 5
 
 class ReportDateFilter(admin.SimpleListFilter):
     # Human-readable title which will be displayed in the
@@ -23,9 +24,12 @@ class ReportDateFilter(admin.SimpleListFilter):
         """
         return (
             ('Any Date', ''),
+            ('-week', 'Last 1 week'),
+            ('yesterday', 'Yesterday'),
             ('today', 'Today'),
-            ('week', 'One Week'),
-            ('month', 'One Month'),
+            ('tomorrow', 'Tomorrow'),
+            ('week', 'Next 1 Week'),
+            ('month', 'Next 1 Month'),
         )
 
     def queryset(self, request, queryset):
@@ -36,8 +40,23 @@ class ReportDateFilter(admin.SimpleListFilter):
         """
         # Compare the requested value (either '80s' or '90s')
         # to decide how to filter the queryset.
+        if self.value() == '-week':
+            return queryset.filter(report_date__gte=date.today() - timedelta(days=7), report_date__lt=date.today())
+        if self.value() == 'yesterday':
+            d = date.today() - timedelta(days=1)
+            while d.weekday() in [SATURDAY, SUNDAY]:
+                d -= timedelta(days=1)
+            return queryset.filter(report_date=d)
         if self.value() == 'today':
-            return queryset.filter(report_date=date.today())
+            d = date.today()
+            while d.weekday() in [SATURDAY, SUNDAY]:
+                d += timedelta(days=1)
+            return queryset.filter(report_date=d)
+        if self.value() == 'tomorrow':
+            d = date.today() + timedelta(days=1)
+            while d.weekday() in [SATURDAY, SUNDAY]:
+                d += timedelta(days=1)
+            return queryset.filter(report_date=d)
         if self.value() == 'week':
             return queryset.filter(report_date__gte=date.today(), report_date__lt=date.today() + timedelta(days=7))
         if self.value() == 'month':
@@ -46,7 +65,7 @@ class ReportDateFilter(admin.SimpleListFilter):
 
 @admin.register(Stock)
 class StockAdmin(admin.ModelAdmin):
-    list_display = ['symbol', 'company', 'recommendation', 'number', 'report_date', 'time']
+    list_display = ['symbol', 'company', 'time', 'report_date', 'quarter', 'recommendation', 'number', 'cap', 'eps', 'last_eps', 'cnb_img', 'surprise_img']
     list_filter = [ReportDateFilter, "recommendation"]
     ordering = ['report_date', '-recommendation', '-number']
-    readonly_fields = ('recommendation_img', )
+    readonly_fields = ('recommendation_img', 'cnb_img', 'surprise_img')

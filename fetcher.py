@@ -14,7 +14,7 @@ from earnings.models import Stock
 EARNINGS_URL = 'http://www.nasdaq.com/earnings/earnings-calendar.aspx?date='
 RECOMMENDATION_URL = 'http://www.nasdaq.com/charts/%s_smallrm.jpeg'
 INTERESTING_SYMBOLS = ['amzn', 'fb', 'appl', 'googl', 'goog', 'tsla']
-
+SATURDAY = 5
 
 def parse_money(s):
     if s == 'n/a':
@@ -116,9 +116,9 @@ def parse_earnings_table(dev, with_time):
 
 def fetch_earnings():
     count = 0
-    day = datetime.date.today() + datetime.timedelta(days=7)
+    day = datetime.date.today()
     while count < 10:
-        if day.weekday() < 5:
+        if day.weekday() < SATURDAY:
             url = EARNINGS_URL + day.strftime("%Y-%b-%d")
             print url
             page = requests.get(url)
@@ -130,7 +130,6 @@ def fetch_earnings():
 
 
 def main():
-    #db.create_tables([Stock])
     fetch_earnings()
 
 
